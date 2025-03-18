@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Redirect Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>URL Redirect Tracker</h1>
+            <p class="description">Enter a URL to track its redirect chain and discover the final destination.</p>
+        </header>
+        
+        <div class="input-group">
+            <input type="text" id="urlInput" class="url-input" placeholder="Enter URL (e.g., bit.ly/example)" autocomplete="off">
+            <button id="pasteButton" class="paste-button">Paste</button>
+            <button id="trackButton" class="track-button">Track Redirects</button>
+            <button id="clearButton" class="clear-button">Clear</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <span>Tracking redirects...</span>
+        </div>
+        
+        <div id="results" class="results">
+            <!-- Results will be displayed here -->
+        </div>
+        
+        <div id="history" class="history-section" style="display: none;">
+            <div class="history-title">
+                <h3>Recent Searches</h3>
+                <button id="clearHistoryButton" class="history-clear">Clear History</button>
+            </div>
+            <ul id="historyList" class="history-list">
+                <!-- History items will be displayed here -->
+            </ul>
+        </div>
+    </div>
+    
+    <script src="redirect-service.js"></script>
+</body>
+</html>
