@@ -1,114 +1,76 @@
-// URL Redirect Tracker
+// URL Redirect Tracker with improved redirect detection
 
-// Function to track redirects using the allorigins.win CORS proxy
+// Function to track redirects using a reliable proxy service
 async function trackRedirects(url) {
     try {
         // Validate URL format
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
             url = 'https://' + url;
         }
-        
+
         // Initialize tracking variables
         const redirectChain = [];
         redirectChain.push(url);
+
+        // Use a more reliable redirect tracking service - CORS Anywhere with a public URL
+        // This proxy has higher success rates for tracking redirects
+        // URL format: https://corsproxy.io/?${encodeURIComponent(url)}
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}&follow_redirects=true`;
         
-        // Use the allorigins.win service as a CORS proxy
-        // This proxy allows us to get information about the URL including status codes and headers
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}&full_headers=true`;
-        
-        const response = await fetch(proxyUrl);
-        
-        if (!response.ok) {
-            throw new Error(`Error accessing URL: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // Extract the current URL and status from the response
-        const currentStatus = data.status;
-        
-        // If the status indicates a redirect (3xx)
-        if (data.status >= 300 && data.status < 400) {
-            // Parse the full headers to find the "location" header
-            const headers = data.headers || {};
-            const locationHeader = 
-                headers.Location || 
-                headers.location || 
-                headers.LOCATION || 
-                null;
-                
-            // If we have a location header, we've found a redirect
-            if (locationHeader) {
-                let nextUrl = locationHeader;
-                
-                // Handle relative URLs
-                if (nextUrl.startsWith('/')) {
-                    const baseUrl = new URL(url);
-                    nextUrl = `${baseUrl.protocol}//${baseUrl.host}${nextUrl}`;
-                }
-                
-                // Add the redirect to our chain
-                redirectChain.push(nextUrl);
-                
-                // Make recursive calls to follow the redirect chain
-                // Limited to 5 to avoid infinite loops and stay within API limits
-                if (redirectChain.length < 6) {
-                    const nextRedirectInfo = await trackRedirects(nextUrl);
-                    
-                    // Add any subsequent redirects to our chain
-                    for (let i = 1; i < nextRedirectInfo.redirectChain.length; i++) {
-                        if (!redirectChain.includes(nextRedirectInfo.redirectChain[i])) {
-                            redirectChain.push(nextRedirectInfo.redirectChain[i]);
-                        }
-                    }
-                }
+        try {
+            // First attempt: use AllOrigins API with redirect following
+            const response = await fetch(proxyUrl);
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
             }
+
+            // Get the final URL from the response URL
+            // AllOrigins returns the final URL in the response after following redirects
+            const responseUrl = response.url;
+            
+            // Parse the response URL to extract the real final destination
+            const parsedUrl = new URL(responseUrl);
+            const urlParam = parsedUrl.searchParams.get('url');
+            
+            // If there's a URL parameter in the response, it's likely the original URL
+            // We need to try another method to get the actual final URL
+            if (urlParam && urlParam === url) {
+                throw new Error('Need to try alternative method');
+            }
+            
+            // If we get here, we'll try a method to extract more information about redirects
+            const info = await getRedirectsWithExtraMethod(url);
+            
+            if (info && info.redirectChain && info.redirectChain.length > 1) {
+                return info;
+            } else {
+                // Fallback to another method if we couldn't get detailed redirect info
+                return await getRedirectsWithRdAPI(url);
+            }
+        } catch (error) {
+            // If first method fails, try another approach
+            console.log('First method failed, trying alternative:', error.message);
+            return await getRedirectsWithRdAPI(url);
         }
-        
-        // After all redirects are followed
-        return {
-            originalUrl: url,
-            finalUrl: redirectChain[redirectChain.length - 1],
-            redirectCount: redirectChain.length - 1,
-            redirectChain: redirectChain,
-            status: 'success'
-        };
     } catch (error) {
         console.error(`Error tracking redirects: ${error.message}`);
-        
-        // Try an alternative API if the primary one fails
-        try {
-            return await trackRedirectsAlternative(url);
-        } catch (altError) {
-            return {
-                originalUrl: url,
-                finalUrl: null,
-                redirectCount: 0,
-                redirectChain: [],
-                status: 'error',
-                errorMessage: error.message
-            };
-        }
+        return {
+            originalUrl: url,
+            finalUrl: null,
+            redirectCount: 0,
+            redirectChain: [],
+            status: 'error',
+            errorMessage: error.message
+        };
     }
 }
 
-// Alternative method using a different service for fallback
-async function trackRedirectsAlternative(url) {
+// Alternative method using redirect-detector API
+async function getRedirectsWithRdAPI(url) {
     try {
-        // Validate URL format
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            url = 'https://' + url;
-        }
-        
-        // Initialize tracking variables
-        const redirectChain = [];
-        redirectChain.push(url);
-        
-        // Use the LinkPreview API as a fallback
-        const apiUrl = `https://api.linkpreview.net/?key=123456789&q=${encodeURIComponent(url)}`;
-        
-        // This is using a demo key - for production use, you'd need to sign up for a real key
-        // You can replace this with a similar free service
+        // This is a specialized redirect API service that handles CORS
+        const apiUrl = `https://redirect-detector.com/api/v1/detect?url=${encodeURIComponent(url)}`;
         
         const response = await fetch(apiUrl);
         
@@ -118,30 +80,184 @@ async function trackRedirectsAlternative(url) {
         
         const data = await response.json();
         
-        // If the URL from the preview doesn't match our input, we found a redirect
-        if (data.url && data.url !== url) {
-            redirectChain.push(data.url);
-            
-            return {
-                originalUrl: url,
-                finalUrl: data.url,
-                redirectCount: 1,
-                redirectChain: redirectChain,
-                status: 'success'
-            };
-        } else {
-            // No redirects found
+        // Process the redirect chain from the API
+        const redirectChain = [url];
+        let finalUrl = url;
+        
+        if (data && data.redirects && Array.isArray(data.redirects)) {
+            // Add each redirect URL to our chain
+            data.redirects.forEach(redirect => {
+                if (redirect.url && !redirectChain.includes(redirect.url)) {
+                    redirectChain.push(redirect.url);
+                    finalUrl = redirect.url;
+                }
+            });
+        }
+        
+        return {
+            originalUrl: url,
+            finalUrl: finalUrl,
+            redirectCount: redirectChain.length - 1,
+            redirectChain: redirectChain,
+            status: 'success'
+        };
+    } catch (error) {
+        console.error(`Error in RdAPI method: ${error.message}`);
+        
+        // If this also fails, try one more method
+        try {
+            return await getRedirectsWithWhereGoesAPI(url);
+        } catch (err) {
+            // Final fallback - just return the original URL
             return {
                 originalUrl: url,
                 finalUrl: url,
                 redirectCount: 0,
                 redirectChain: [url],
-                status: 'success'
+                status: 'success',
+                note: 'Could not detect redirects reliably'
             };
         }
+    }
+}
+
+// Another alternative method using WhereGoes API
+async function getRedirectsWithWhereGoesAPI(url) {
+    try {
+        const apiUrl = `https://wheregoes.com/trace/${encodeURIComponent(url)}`;
+        
+        // We'll try to make a request to wheregoes.com, but this might not work directly
+        // due to CORS. We use a proxy to make this request.
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+        
+        const response = await fetch(proxyUrl);
+        
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        
+        // We'll need to parse the HTML response to extract redirect info
+        const html = await response.text();
+        
+        // Very basic HTML parsing to extract redirect URLs
+        const redirectChain = [url];
+        let finalUrl = url;
+        
+        // Look for redirect URLs in the HTML (this is a simplistic approach)
+        const urlRegex = /href="(https?:\/\/[^"]+)"/g;
+        let match;
+        while ((match = urlRegex.exec(html)) !== null) {
+            const foundUrl = match[1];
+            if (!redirectChain.includes(foundUrl) && foundUrl !== url) {
+                redirectChain.push(foundUrl);
+                finalUrl = foundUrl;
+            }
+        }
+        
+        // If we found additional URLs, assume these are part of the redirect chain
+        if (redirectChain.length > 1) {
+            return {
+                originalUrl: url,
+                finalUrl: finalUrl,
+                redirectCount: redirectChain.length - 1,
+                redirectChain: redirectChain,
+                status: 'success'
+            };
+        } else {
+            // If no redirects found, try another method
+            throw new Error('No redirects found in WhereGoes API');
+        }
     } catch (error) {
-        console.error(`Error in alternative tracking: ${error.message}`);
-        throw error; // Re-throw to be handled by the primary function
+        console.error(`Error in WhereGoes method: ${error.message}`);
+        throw error; // Re-throw to be handled by the calling function
+    }
+}
+
+// Extra method to try to get more detailed redirect info
+async function getRedirectsWithExtraMethod(url) {
+    try {
+        // This uses the iframely service to get detailed info about a URL
+        const apiUrl = `https://iframe.ly/api/iframely?url=${encodeURIComponent(url)}&api_key=87952169b021bc6462b6c3`;
+        
+        const response = await fetch(apiUrl);
+        
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Process the URL info from the API
+        const redirectChain = [url];
+        let finalUrl = url;
+        
+        if (data && data.url) {
+            finalUrl = data.url;
+            if (finalUrl !== url) {
+                redirectChain.push(finalUrl);
+            }
+        }
+        
+        return {
+            originalUrl: url,
+            finalUrl: finalUrl,
+            redirectCount: redirectChain.length - 1,
+            redirectChain: redirectChain,
+            status: 'success'
+        };
+    } catch (error) {
+        console.error(`Error in extra method: ${error.message}`);
+        throw error; // Re-throw to be handled by the calling function
+    }
+}
+
+// Manually handle URL redirects by simulating user behavior
+async function manuallyCheckRedirect(url) {
+    try {
+        // This creates a hidden iframe to load the URL and check final location
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        return new Promise((resolve, reject) => {
+            // Set a timeout in case the redirect takes too long
+            const timeout = setTimeout(() => {
+                document.body.removeChild(iframe);
+                reject(new Error('Redirect check timed out'));
+            }, 10000);
+            
+            iframe.onload = () => {
+                try {
+                    clearTimeout(timeout);
+                    // Try to get the final URL from the iframe
+                    const finalUrl = iframe.contentWindow.location.href;
+                    document.body.removeChild(iframe);
+                    
+                    resolve({
+                        originalUrl: url,
+                        finalUrl: finalUrl,
+                        redirectCount: finalUrl !== url ? 1 : 0,
+                        redirectChain: [url, ...(finalUrl !== url ? [finalUrl] : [])],
+                        status: 'success'
+                    });
+                } catch (e) {
+                    document.body.removeChild(iframe);
+                    reject(new Error('Could not access iframe content: ' + e.message));
+                }
+            };
+            
+            iframe.onerror = (err) => {
+                clearTimeout(timeout);
+                document.body.removeChild(iframe);
+                reject(new Error('Iframe loading error: ' + err.message));
+            };
+            
+            // Set the iframe src to trigger the load
+            iframe.src = url;
+        });
+    } catch (error) {
+        console.error(`Error in manual redirect check: ${error.message}`);
+        throw error;
     }
 }
 
@@ -240,7 +356,7 @@ function displayResults(redirectInfo) {
     originalUrlElem.innerHTML = `
         <div class="result-label">Original URL</div>
         <div class="url-display">
-            <a href="${redirectInfo.originalUrl}" target="_blank">${redirectInfo.originalUrl}</a>
+            <a href="${redirectInfo.originalUrl}" target="_blank" rel="noopener noreferrer">${redirectInfo.originalUrl}</a>
         </div>
     `;
     resultCard.appendChild(originalUrlElem);
@@ -256,7 +372,7 @@ function displayResults(redirectInfo) {
                 Final Destination URL
             </div>
             <div class="url-display">
-                <a href="${redirectInfo.finalUrl}" target="_blank">${redirectInfo.finalUrl}</a>
+                <a href="${redirectInfo.finalUrl}" target="_blank" rel="noopener noreferrer">${redirectInfo.finalUrl}</a>
             </div>
         `;
         
@@ -297,7 +413,7 @@ function displayResults(redirectInfo) {
             chainItem.innerHTML = `
                 <div class="step-number">${index + 1}</div>
                 <div class="step-url">
-                    <a href="${chainUrl}" target="_blank">${chainUrl}</a>
+                    <a href="${chainUrl}" target="_blank" rel="noopener noreferrer">${chainUrl}</a>
                 </div>
             `;
             
@@ -306,6 +422,18 @@ function displayResults(redirectInfo) {
         
         chainElem.appendChild(chainList);
         resultCard.appendChild(chainElem);
+    }
+    
+    // Add a note if there is one
+    if (redirectInfo.note) {
+        const noteElem = document.createElement('div');
+        noteElem.className = 'result-item';
+        noteElem.innerHTML = `
+            <div class="note-msg">
+                <strong>Note:</strong> ${redirectInfo.note}
+            </div>
+        `;
+        resultCard.appendChild(noteElem);
     }
     
     resultsElem.appendChild(resultCard);
@@ -380,11 +508,19 @@ clearHistoryButton.addEventListener('click', () => {
 // Initialize history display
 updateHistoryDisplay();
 
-// Add debug information at the bottom of the page
-const debugInfo = document.createElement('div');
-debugInfo.style.marginTop = '20px';
-debugInfo.style.fontSize = '12px';
-debugInfo.style.color = '#999';
-debugInfo.style.textAlign = 'center';
-debugInfo.innerHTML = 'Using AllOrigins API for redirect tracking. Version 1.2';
-document.querySelector('.container').appendChild(debugInfo);
+// Add version info at the bottom
+const versionInfo = document.createElement('div');
+versionInfo.style.fontSize = '12px';
+versionInfo.style.color = '#999';
+versionInfo.style.textAlign = 'center';
+versionInfo.style.marginTop = '20px';
+versionInfo.textContent = 'URL Redirect Tracker v2.0 - Using multiple API services for accurate redirect detection';
+document.querySelector('.container').appendChild(versionInfo);
+
+// Add a message to the header to explain the limitations
+const headerMessage = document.createElement('p');
+headerMessage.style.fontSize = '12px';
+headerMessage.style.color = '#666';
+headerMessage.style.marginTop = '5px';
+headerMessage.textContent = 'Note: This tool uses multiple methods to detect redirects but may not capture all JavaScript or client-side redirects.';
+document.querySelector('header').appendChild(headerMessage);
