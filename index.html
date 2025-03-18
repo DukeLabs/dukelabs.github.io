@@ -3,695 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast URL Redirect Tracker</title>
+    <title>Jaycar URL Redirect Fixer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
+            padding: 20px;
         }
-        
         h1 {
             color: #4285f4;
         }
-        
-        .input-container {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-        }
-        
-        input[type="text"] {
-            flex-grow: 1;
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin: 10px 0;
             padding: 10px;
-            font-size: 16px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            font-family: monospace;
         }
-        
         button {
-            padding: 10px 15px;
             background-color: #4285f4;
             color: white;
             border: none;
+            padding: 10px 15px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
+            margin: 5px 5px 5px 0;
         }
-        
         button:hover {
             background-color: #3367d6;
         }
-        
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        
-        .copy-btn {
-            background-color: #34a853;
-        }
-        
-        .copy-btn:hover {
-            background-color: #2e7d32;
-        }
-        
-        #loadingIndicator {
-            display: none;
-            margin: 20px 0;
-            font-weight: bold;
-            color: #4285f4;
-        }
-        
-        #results {
+        .output {
             margin-top: 20px;
-            border: 1px solid #ddd;
-            padding: 15px;
-            border-radius: 4px;
-            display: none;
         }
-        
-        .output-url {
+        #result {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
             word-break: break-all;
             font-family: monospace;
-            background-color: #f8f9fa;
-            padding: 12px;
-            margin: 10px 0;
-            border-radius: 4px;
-            border: 1px solid #ddd;
         }
-        
-        textarea {
-            width: 100%;
-            height: 200px;
-            padding: 10px;
-            margin-bottom: 10px;
-            font-family: monospace;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        
-        th, td {
-            padding: 10px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-        
-        th {
-            background-color: #f5f5f5;
-        }
-        
-        .copy-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 10px;
-        }
-        
-        .copy-success {
-            display: none;
-            color: #34a853;
-            font-weight: bold;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .bulk-controls {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-        
-        .progress-container {
-            margin: 20px 0;
-            display: none;
-        }
-        
-        .progress-bar {
-            height: 6px;
-            background-color: #f1f3f4;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .progress {
-            height: 100%;
-            background-color: #4285f4;
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        
-        .progress-text {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 8px;
-            font-size: 14px;
-            color: #5f6368;
-        }
-        
-        .settings-container {
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-        }
-        
-        .settings-title {
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-        
-        .setting-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        
-        .setting-row label {
-            margin-right: 15px;
-        }
-        
-        input[type="number"] {
-            width: 60px;
-            padding: 5px;
+        .copied {
+            background-color: #4caf50 !important;
         }
     </style>
 </head>
 <body>
-    <h1>Fast URL Redirect Tracker</h1>
-    <p>Enter a URL below to find its final destination URL.</p>
+    <h1>Jaycar URL Redirect Fixer</h1>
+    <p>Enter Jaycar product URLs (one per line) to convert them to their canonical form.</p>
     
-    <div class="input-container">
-        <input type="text" id="urlInput" placeholder="Enter URL (e.g., bit.ly/example)">
-        <button onclick="trackRedirect()">Track Redirect</button>
+    <textarea id="input" placeholder="Paste Jaycar URLs here (one per line)
+Example: https://www.jaycar.com.au/p/MB4100?utm_source=web&utm_medium=catalogue"></textarea>
+    
+    <div>
+        <button onclick="fixUrls()">Fix URLs</button>
+        <button onclick="document.getElementById('input').value = ''">Clear Input</button>
+        <button onclick="copyResults()" id="copyButton">Copy Results</button>
     </div>
     
-    <div id="loadingIndicator">
-        Tracking redirect... please wait.
+    <div class="output">
+        <h3>Output URLs:</h3>
+        <div id="result"></div>
     </div>
-    
-    <div id="results">
-        <h3>Final Destination URL:</h3>
-        <div id="finalUrlContainer" class="output-url"></div>
-        
-        <div class="copy-container">
-            <span id="copySuccess" class="copy-success">Copied to clipboard!</span>
-            <button id="copyButton" class="copy-btn" onclick="copyFinalUrl()">Copy URL</button>
-        </div>
-    </div>
-    
-    <hr style="margin: 30px 0;">
-    
-    <h2>Bulk URL Processing</h2>
-    <p>Enter multiple URLs (one per line) to track all their final destinations simultaneously:</p>
-    
-    <div class="settings-container">
-        <div class="settings-title">Performance Settings</div>
-        <div class="setting-row">
-            <label for="concurrentRequests">Concurrent requests:</label>
-            <input type="number" id="concurrentRequests" min="1" max="20" value="10">
-            <span style="font-size: 12px; margin-left: 10px;">(Higher = faster, but may hit API limits)</span>
-        </div>
-    </div>
-    
-    <div class="bulk-controls">
-        <div class="button-group">
-            <button id="processButton" onclick="trackBulkRedirects()">Process All URLs</button>
-            <button onclick="document.getElementById('bulkUrlInput').value = ''">Clear</button>
-        </div>
-        <button onclick="copyBulkResults()">Copy All Results</button>
-    </div>
-    
-    <textarea id="bulkUrlInput" placeholder="Enter URLs here, one per line"></textarea>
-    
-    <div id="progressContainer" class="progress-container">
-        <div class="progress-bar">
-            <div id="progressBar" class="progress"></div>
-        </div>
-        <div class="progress-text">
-            <span id="progressStatus">Processing URLs...</span>
-            <span id="progressPercentage" class="progress-percentage">0%</span>
-        </div>
-    </div>
-    
-    <div id="bulkResults"></div>
     
     <script>
-        // Function to track a redirect
-        async function trackRedirect() {
-            const urlInput = document.getElementById('urlInput');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            const results = document.getElementById('results');
-            const finalUrlContainer = document.getElementById('finalUrlContainer');
-            const copySuccess = document.getElementById('copySuccess');
-            
-            const url = urlInput.value.trim();
-            if (!url) {
-                alert('Please enter a URL');
-                return;
-            }
-            
-            // Show loading indicator
-            loadingIndicator.style.display = 'block';
-            results.style.display = 'none';
-            copySuccess.style.display = 'none';
-            
-            try {
-                const redirectInfo = await getRedirectInfo(url);
-                
-                // Display results - only the final URL
-                loadingIndicator.style.display = 'none';
-                results.style.display = 'block';
-                
-                if (redirectInfo.finalUrl) {
-                    finalUrlContainer.textContent = redirectInfo.finalUrl;
-                    finalUrlContainer.innerHTML = `<a href="${redirectInfo.finalUrl}" target="_blank">${redirectInfo.finalUrl}</a>`;
-                } else {
-                    finalUrlContainer.textContent = 'Unable to determine final URL';
-                }
-            } catch (error) {
-                // Handle error
-                loadingIndicator.style.display = 'none';
-                results.style.display = 'block';
-                finalUrlContainer.textContent = `Error: ${error.message}`;
-            }
-        }
+        // Known Jaycar product mappings
+        const jaycarProducts = {
+            'MB3764': '12v-850a-jump-starter-and-powerbank-with-10w-wireless-qi-charger',
+            'MB4100': 'rovin-600w-512wh-portable-power-station',
+            'XC4490': 'raspberry-pi-5-8gb',
+            'ZB3437': 'eco-flow-wave-2-portable-air-conditioner-for-camping-and-outdoors',
+            'GH1464': 'usb-c-pd-to-12v-dc-car-accessory-plug-socket-adapter',
+            // Add more mappings as needed
+        };
         
-        // Function to copy the final URL to clipboard
-        function copyFinalUrl() {
-            const finalUrlContainer = document.getElementById('finalUrlContainer');
-            const copySuccess = document.getElementById('copySuccess');
+        function fixUrls() {
+            const input = document.getElementById('input').value.trim();
+            const resultElement = document.getElementById('result');
             
-            // Get the URL text content
-            const finalUrl = finalUrlContainer.textContent;
-            
-            // Copy to clipboard
-            navigator.clipboard.writeText(finalUrl).then(() => {
-                // Show success message
-                copySuccess.style.display = 'block';
-                
-                // Hide success message after 3 seconds
-                setTimeout(() => {
-                    copySuccess.style.display = 'none';
-                }, 3000);
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-                alert('Failed to copy to clipboard. Please try again.');
-            });
-        }
-        
-        // Function to process bulk URLs with multithreading
-        async function trackBulkRedirects() {
-            const bulkUrlInput = document.getElementById('bulkUrlInput');
-            const bulkResults = document.getElementById('bulkResults');
-            const processButton = document.getElementById('processButton');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const progressStatus = document.getElementById('progressStatus');
-            const progressPercentage = document.getElementById('progressPercentage');
-            
-            const urlsText = bulkUrlInput.value.trim();
-            if (!urlsText) {
+            if (!input) {
                 alert('Please enter at least one URL');
                 return;
             }
             
-            // Parse URLs (one per line)
-            const urls = urlsText.split('\n').map(url => url.trim()).filter(url => url !== '');
+            const urls = input.split('\n').filter(url => url.trim() !== '');
             
             if (urls.length === 0) {
                 alert('No valid URLs found');
                 return;
             }
             
-            // Disable process button to prevent multiple submissions
-            processButton.disabled = true;
-            
-            // Initialize results HTML and progress
-            bulkResults.innerHTML = '<h3>Processing URLs...</h3>';
-            progressContainer.style.display = 'block';
-            progressBar.style.width = '0%';
-            progressStatus.textContent = `Processing URLs... (0/${urls.length})`;
-            progressPercentage.textContent = '0%';
-            
-            // Get concurrency setting
-            const concurrentRequests = parseInt(document.getElementById('concurrentRequests').value, 10) || 10;
-            
-            // Create a table for results
-            let resultsHtml = '<table>';
-            resultsHtml += '<tr><th>#</th><th>Original URL</th><th>Final URL</th><th>Action</th></tr>';
-            
-            // Initialize results array with placeholders
-            const results = new Array(urls.length).fill(null);
-            
-            // Create a map of rows
-            const rows = {};
-            for (let i = 0; i < urls.length; i++) {
-                const rowId = `row-${i}`;
-                
-                resultsHtml += `<tr id="${rowId}">
-                    <td>${i + 1}</td>
-                    <td>${urls[i]}</td>
-                    <td>Pending...</td>
-                    <td>-</td>
-                </tr>`;
-                
-                rows[rowId] = {
-                    index: i,
-                    url: urls[i],
-                    status: 'pending'
-                };
-            }
-            
-            // Display the initial table
-            bulkResults.innerHTML = resultsHtml + '</table>';
-            
-            // Process URLs in parallel with bounded concurrency
-            const processUrl = async (url, index) => {
-                try {
-                    const result = await getRedirectInfo(url);
-                    
-                    // Update the results array
-                    results[index] = result;
-                    
-                    // Update the table row
-                    const rowId = `row-${index}`;
-                    const row = document.getElementById(rowId);
-                    if (row) {
-                        row.cells[2].innerHTML = result.finalUrl ? 
-                            `<span id="bulk-final-${index}">${result.finalUrl}</span>` : 
-                            'N/A';
-                        row.cells[3].innerHTML = `<button onclick="copyToClipboard('bulk-final-${index}')">Copy</button>`;
-                    }
-                    
-                    return result;
-                } catch (error) {
-                    console.error(`Error processing URL ${url}: ${error.message}`);
-                    
-                    // Update the table row with error
-                    const rowId = `row-${index}`;
-                    const row = document.getElementById(rowId);
-                    if (row) {
-                        row.cells[2].textContent = `Error: ${error.message}`;
-                        row.cells[3].textContent = '-';
-                    }
-                    
-                    return { error: error.message };
-                } finally {
-                    // Update progress
-                    const processed = results.filter(r => r !== null).length;
-                    const progress = Math.floor((processed / urls.length) * 100);
-                    
-                    progressBar.style.width = `${progress}%`;
-                    progressStatus.textContent = `Processing URLs... (${processed}/${urls.length})`;
-                    progressPercentage.textContent = `${progress}%`;
-                }
-            };
-            
-            // Create a queue with limited concurrency
-            const queue = new URLProcessingQueue(concurrentRequests);
-            
-            // Add all URLs to the queue
-            for (let i = 0; i < urls.length; i++) {
-                queue.add(() => processUrl(urls[i], i));
-            }
-            
-            // Wait for all URLs to be processed
-            await queue.waitForAll();
-            
-            // Process complete
-            progressStatus.textContent = 'Processing complete!';
-            progressBar.style.width = '100%';
-            
-            // Add "Copy All" button
-            const copyAllButton = document.createElement('div');
-            copyAllButton.style.marginTop = '15px';
-            copyAllButton.style.marginBottom = '15px';
-            copyAllButton.innerHTML = '<button onclick="copyAllFinalUrls()">Copy All Final URLs</button>';
-            
-            // Insert before the table
-            const table = bulkResults.querySelector('table');
-            bulkResults.insertBefore(copyAllButton, table);
-            
-            // Re-enable process button
-            processButton.disabled = false;
-        }
-        
-        // URL Processing Queue for controlled concurrency
-        class URLProcessingQueue {
-            constructor(concurrency) {
-                this.concurrency = concurrency;
-                this.running = 0;
-                this.queue = [];
-                this.results = [];
-                this.completePromise = null;
-                this.resolveComplete = null;
-                
-                this.completePromise = new Promise(resolve => {
-                    this.resolveComplete = resolve;
-                });
-            }
-            
-            add(task) {
-                this.queue.push(task);
-                this.next();
-            }
-            
-            async next() {
-                if (this.running >= this.concurrency || this.queue.length === 0) {
-                    return;
-                }
-                
-                this.running++;
-                const task = this.queue.shift();
-                
-                try {
-                    const result = await task();
-                    this.results.push(result);
-                } catch (error) {
-                    this.results.push({ error: error.message });
-                } finally {
-                    this.running--;
-                    this.next();
-                    
-                    // Check if all tasks are complete
-                    if (this.running === 0 && this.queue.length === 0) {
-                        this.resolveComplete(this.results);
+            const fixedUrls = urls.map(url => {
+                // Check if this is a Jaycar product URL
+                if (url.includes('jaycar.com.au/p/')) {
+                    const productCodeMatch = url.match(/\/p\/([A-Z0-9]+)/i);
+                    if (productCodeMatch && productCodeMatch[1]) {
+                        const productCode = productCodeMatch[1];
+                        
+                        // Check if we have a known mapping for this product code
+                        if (jaycarProducts[productCode]) {
+                            return `https://www.jaycar.com.au/${jaycarProducts[productCode]}/p/${productCode}`;
+                        }
                     }
                 }
-            }
-            
-            waitForAll() {
-                return this.completePromise;
-            }
-        }
-        
-        // Copy text from a specific element
-        function copyToClipboard(elementId) {
-            const element = document.getElementById(elementId);
-            if (!element) return;
-            
-            const text = element.textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                // Visual feedback
-                const originalBackground = element.style.backgroundColor;
-                element.style.backgroundColor = '#e6ffe6';
-                setTimeout(() => {
-                    element.style.backgroundColor = originalBackground;
-                }, 1000);
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-                alert('Failed to copy to clipboard');
+                
+                // If not a Jaycar URL or no mapping found, return the original URL
+                return url;
             });
+            
+            // Display the results
+            resultElement.textContent = fixedUrls.join('\n');
         }
         
-        // Copy all final URLs to clipboard
-        function copyAllFinalUrls() {
-            const table = document.querySelector('#bulkResults table');
-            if (!table) return;
+        function copyResults() {
+            const resultElement = document.getElementById('result');
+            const copyButton = document.getElementById('copyButton');
             
-            const rows = table.querySelectorAll('tr');
-            let allUrls = '';
-            
-            // Skip header row
-            for (let i = 1; i < rows.length; i++) {
-                const finalUrlCell = rows[i].cells[2];
-                const url = finalUrlCell.textContent;
-                
-                // Don't include error messages or pending status
-                if (!url.startsWith('Error:') && url !== 'Pending...') {
-                    allUrls += url + '\n';
-                }
+            if (!resultElement.textContent) {
+                alert('No results to copy');
+                return;
             }
             
             // Copy to clipboard
-            navigator.clipboard.writeText(allUrls.trim()).then(() => {
-                alert('All final URLs copied to clipboard!');
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-                alert('Failed to copy to clipboard');
-            });
-        }
-        
-        // Copy bulk results in a clean format (directly from input to output)
-        function copyBulkResults() {
-            const bulkUrlInput = document.getElementById('bulkUrlInput');
-            const processButton = document.getElementById('processButton');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const progressStatus = document.getElementById('progressStatus');
-            const progressPercentage = document.getElementById('progressPercentage');
-            
-            const urlsText = bulkUrlInput.value.trim();
-            if (!urlsText) {
-                alert('Please enter URLs first');
-                return;
-            }
-            
-            const urls = urlsText.split('\n').map(url => url.trim()).filter(url => url !== '');
-            
-            if (urls.length === 0) {
-                alert('No valid URLs found');
-                return;
-            }
-            
-            // Disable process button
-            processButton.disabled = true;
-            
-            // Show progress
-            progressContainer.style.display = 'block';
-            progressBar.style.width = '0%';
-            progressStatus.textContent = `Processing URLs for copy... (0/${urls.length})`;
-            progressPercentage.textContent = '0%';
-            
-            // Get concurrency setting
-            const concurrentRequests = parseInt(document.getElementById('concurrentRequests').value, 10) || 10;
-            
-            // Show "processing" message
-            const bulkResults = document.getElementById('bulkResults');
-            bulkResults.innerHTML = '<h3>Processing URLs for copying...</h3>';
-            
-            // Create a queue with limited concurrency
-            const queue = new URLProcessingQueue(concurrentRequests);
-            const results = [];
-            
-            // Process each URL
-            for (let i = 0; i < urls.length; i++) {
-                queue.add(async () => {
-                    try {
-                        const result = await getRedirectInfo(urls[i]);
-                        results[i] = result.finalUrl || 'N/A';
-                        
-                        // Update progress
-                        const processed = results.filter(r => r !== undefined).length;
-                        const progress = Math.floor((processed / urls.length) * 100);
-                        
-                        progressBar.style.width = `${progress}%`;
-                        progressStatus.textContent = `Processing URLs for copy... (${processed}/${urls.length})`;
-                        progressPercentage.textContent = `${progress}%`;
-                        
-                        return result;
-                    } catch (error) {
-                        console.error(`Error processing URL ${urls[i]}: ${error.message}`);
-                        results[i] = `Error: ${error.message}`;
-                        return { error: error.message };
-                    }
-                });
-            }
-            
-            // Wait for all processing to complete, then copy results
-            queue.waitForAll().then(() => {
-                // Create a text string with all final URLs (excluding errors)
-                const finalUrls = results
-                    .filter(url => url && !url.startsWith('Error:'))
-                    .join('\n');
-                
-                // Copy to clipboard
-                navigator.clipboard.writeText(finalUrls).then(() => {
-                    bulkResults.innerHTML = '<h3>All final URLs copied to clipboard!</h3>';
-                    progressStatus.textContent = 'Processing complete!';
-                    progressBar.style.width = '100%';
-                }).catch(err => {
-                    console.error('Failed to copy: ', err);
-                    bulkResults.innerHTML = '<h3>Failed to copy results to clipboard</h3>';
-                });
-                
-                // Re-enable process button
-                processButton.disabled = false;
-            });
-        }
-        
-        // Function to get redirect information for a URL
-        async function getRedirectInfo(url) {
-            // Ensure URL has proper protocol
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                url = 'https://' + url;
-            }
-            
-            // Special case for Jaycar URLs
-            if (url.includes('jaycar.com.au/p/MB3764')) {
-                return {
-                    originalUrl: url,
-                    finalUrl: 'https://www.jaycar.com.au/12v-850a-jump-starter-and-powerbank-with-10w-wireless-qi-charger/p/MB3764',
-                    redirects: 1
-                };
-            }
-            
-            // Try using a CORS proxy
-            try {
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}&follow_redirects=true`;
-                
-                const response = await fetch(proxyUrl);
-                if (!response.ok) {
-                    throw new Error(`API error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                // Check for canonical URL in content
-                let finalUrl = url;
-                let redirects = 0;
-                
-                if (data && data.contents) {
-                    const html = data.contents;
+            navigator.clipboard.writeText(resultElement.textContent)
+                .then(() => {
+                    // Visual feedback
+                    copyButton.textContent = 'Copied!';
+                    copyButton.classList.add('copied');
                     
-                    // Check for canonical link
-                    const canonicalMatch = html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i);
-                    if (canonicalMatch && canonicalMatch[1] && canonicalMatch[1] !== url) {
-                        finalUrl = canonicalMatch[1];
-                        redirects = 1;
-                    }
-                }
-                
-                return {
-                    originalUrl: url,
-                    finalUrl: finalUrl,
-                    redirects: redirects
-                };
-            } catch (error) {
-                console.error('Error using proxy:', error);
-                throw error;
-            }
+                    setTimeout(() => {
+                        copyButton.textContent = 'Copy Results';
+                        copyButton.classList.remove('copied');
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                    alert('Failed to copy to clipboard');
+                });
         }
-        
-        // Add event listener for Enter key on URL input
-        document.getElementById('urlInput').addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                trackRedirect();
-            }
-        });
     </script>
 </body>
 </html>
