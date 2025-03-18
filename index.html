@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>URL Redirect Tracker</title>
+    <title>Fast URL Redirect Tracker</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -44,6 +44,11 @@
         
         button:hover {
             background-color: #3367d6;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
         }
         
         .copy-btn {
@@ -128,10 +133,64 @@
             justify-content: space-between;
             margin-bottom: 10px;
         }
+        
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background-color: #f1f3f4;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            height: 100%;
+            background-color: #4285f4;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #5f6368;
+        }
+        
+        .settings-container {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        .settings-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .setting-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .setting-row label {
+            margin-right: 15px;
+        }
+        
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+        }
     </style>
 </head>
 <body>
-    <h1>URL Redirect Tracker</h1>
+    <h1>Fast URL Redirect Tracker</h1>
     <p>Enter a URL below to find its final destination URL.</p>
     
     <div class="input-container">
@@ -156,17 +215,36 @@
     <hr style="margin: 30px 0;">
     
     <h2>Bulk URL Processing</h2>
-    <p>Enter multiple URLs (one per line) to track all their final destinations at once:</p>
+    <p>Enter multiple URLs (one per line) to track all their final destinations simultaneously:</p>
+    
+    <div class="settings-container">
+        <div class="settings-title">Performance Settings</div>
+        <div class="setting-row">
+            <label for="concurrentRequests">Concurrent requests:</label>
+            <input type="number" id="concurrentRequests" min="1" max="20" value="10">
+            <span style="font-size: 12px; margin-left: 10px;">(Higher = faster, but may hit API limits)</span>
+        </div>
+    </div>
     
     <div class="bulk-controls">
         <div class="button-group">
-            <button onclick="trackBulkRedirects()">Process All URLs</button>
+            <button id="processButton" onclick="trackBulkRedirects()">Process All URLs</button>
             <button onclick="document.getElementById('bulkUrlInput').value = ''">Clear</button>
         </div>
         <button onclick="copyBulkResults()">Copy All Results</button>
     </div>
     
     <textarea id="bulkUrlInput" placeholder="Enter URLs here, one per line"></textarea>
+    
+    <div id="progressContainer" class="progress-container">
+        <div class="progress-bar">
+            <div id="progressBar" class="progress"></div>
+        </div>
+        <div class="progress-text">
+            <span id="progressStatus">Processing URLs...</span>
+            <span id="progressPercentage" class="progress-percentage">0%</span>
+        </div>
+    </div>
     
     <div id="bulkResults"></div>
     
@@ -234,10 +312,15 @@
             });
         }
         
-        // Function to process bulk URLs
+        // Function to process bulk URLs with multithreading
         async function trackBulkRedirects() {
             const bulkUrlInput = document.getElementById('bulkUrlInput');
             const bulkResults = document.getElementById('bulkResults');
+            const processButton = document.getElementById('processButton');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressStatus = document.getElementById('progressStatus');
+            const progressPercentage = document.getElementById('progressPercentage');
             
             const urlsText = bulkUrlInput.value.trim();
             if (!urlsText) {
@@ -253,44 +336,166 @@
                 return;
             }
             
-            // Initialize results HTML
+            // Disable process button to prevent multiple submissions
+            processButton.disabled = true;
+            
+            // Initialize results HTML and progress
             bulkResults.innerHTML = '<h3>Processing URLs...</h3>';
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressStatus.textContent = `Processing URLs... (0/${urls.length})`;
+            progressPercentage.textContent = '0%';
             
-            // Create a table for results - simplified for easy copying
+            // Get concurrency setting
+            const concurrentRequests = parseInt(document.getElementById('concurrentRequests').value, 10) || 10;
+            
+            // Create a table for results
             let resultsHtml = '<table>';
-            resultsHtml += '<tr><th>Original URL</th><th>Final URL</th><th>Action</th></tr>';
+            resultsHtml += '<tr><th>#</th><th>Original URL</th><th>Final URL</th><th>Action</th></tr>';
             
-            // Process each URL
+            // Initialize results array with placeholders
+            const results = new Array(urls.length).fill(null);
+            
+            // Create a map of rows
+            const rows = {};
             for (let i = 0; i < urls.length; i++) {
-                const url = urls[i];
+                const rowId = `row-${i}`;
                 
-                try {
-                    const redirectInfo = await getRedirectInfo(url);
-                    
-                    resultsHtml += `<tr>
-                        <td>${url}</td>
-                        <td id="bulk-final-${i}">${redirectInfo.finalUrl || 'N/A'}</td>
-                        <td><button onclick="copyToClipboard('bulk-final-${i}')">Copy</button></td>
-                    </tr>`;
-                } catch (error) {
-                    resultsHtml += `<tr>
-                        <td>${url}</td>
-                        <td>Error: ${error.message}</td>
-                        <td>-</td>
-                    </tr>`;
-                }
+                resultsHtml += `<tr id="${rowId}">
+                    <td>${i + 1}</td>
+                    <td>${urls[i]}</td>
+                    <td>Pending...</td>
+                    <td>-</td>
+                </tr>`;
                 
-                // Update the results as we go
-                bulkResults.innerHTML = `<h3>Processing URLs (${i + 1}/${urls.length})...</h3>` + resultsHtml + '</table>';
+                rows[rowId] = {
+                    index: i,
+                    url: urls[i],
+                    status: 'pending'
+                };
             }
             
-            // Final update with copy all button
-            bulkResults.innerHTML = `
-                <h3>Processed ${urls.length} URLs</h3>
-                <div class="bulk-results-controls">
-                    <button onclick="copyAllFinalUrls()">Copy All Final URLs</button>
-                </div>
-                ${resultsHtml}</table>`;
+            // Display the initial table
+            bulkResults.innerHTML = resultsHtml + '</table>';
+            
+            // Process URLs in parallel with bounded concurrency
+            const processUrl = async (url, index) => {
+                try {
+                    const result = await getRedirectInfo(url);
+                    
+                    // Update the results array
+                    results[index] = result;
+                    
+                    // Update the table row
+                    const rowId = `row-${index}`;
+                    const row = document.getElementById(rowId);
+                    if (row) {
+                        row.cells[2].innerHTML = result.finalUrl ? 
+                            `<span id="bulk-final-${index}">${result.finalUrl}</span>` : 
+                            'N/A';
+                        row.cells[3].innerHTML = `<button onclick="copyToClipboard('bulk-final-${index}')">Copy</button>`;
+                    }
+                    
+                    return result;
+                } catch (error) {
+                    console.error(`Error processing URL ${url}: ${error.message}`);
+                    
+                    // Update the table row with error
+                    const rowId = `row-${index}`;
+                    const row = document.getElementById(rowId);
+                    if (row) {
+                        row.cells[2].textContent = `Error: ${error.message}`;
+                        row.cells[3].textContent = '-';
+                    }
+                    
+                    return { error: error.message };
+                } finally {
+                    // Update progress
+                    const processed = results.filter(r => r !== null).length;
+                    const progress = Math.floor((processed / urls.length) * 100);
+                    
+                    progressBar.style.width = `${progress}%`;
+                    progressStatus.textContent = `Processing URLs... (${processed}/${urls.length})`;
+                    progressPercentage.textContent = `${progress}%`;
+                }
+            };
+            
+            // Create a queue with limited concurrency
+            const queue = new URLProcessingQueue(concurrentRequests);
+            
+            // Add all URLs to the queue
+            for (let i = 0; i < urls.length; i++) {
+                queue.add(() => processUrl(urls[i], i));
+            }
+            
+            // Wait for all URLs to be processed
+            await queue.waitForAll();
+            
+            // Process complete
+            progressStatus.textContent = 'Processing complete!';
+            progressBar.style.width = '100%';
+            
+            // Add "Copy All" button
+            const copyAllButton = document.createElement('div');
+            copyAllButton.style.marginTop = '15px';
+            copyAllButton.style.marginBottom = '15px';
+            copyAllButton.innerHTML = '<button onclick="copyAllFinalUrls()">Copy All Final URLs</button>';
+            
+            // Insert before the table
+            const table = bulkResults.querySelector('table');
+            bulkResults.insertBefore(copyAllButton, table);
+            
+            // Re-enable process button
+            processButton.disabled = false;
+        }
+        
+        // URL Processing Queue for controlled concurrency
+        class URLProcessingQueue {
+            constructor(concurrency) {
+                this.concurrency = concurrency;
+                this.running = 0;
+                this.queue = [];
+                this.results = [];
+                this.completePromise = null;
+                this.resolveComplete = null;
+                
+                this.completePromise = new Promise(resolve => {
+                    this.resolveComplete = resolve;
+                });
+            }
+            
+            add(task) {
+                this.queue.push(task);
+                this.next();
+            }
+            
+            async next() {
+                if (this.running >= this.concurrency || this.queue.length === 0) {
+                    return;
+                }
+                
+                this.running++;
+                const task = this.queue.shift();
+                
+                try {
+                    const result = await task();
+                    this.results.push(result);
+                } catch (error) {
+                    this.results.push({ error: error.message });
+                } finally {
+                    this.running--;
+                    this.next();
+                    
+                    // Check if all tasks are complete
+                    if (this.running === 0 && this.queue.length === 0) {
+                        this.resolveComplete(this.results);
+                    }
+                }
+            }
+            
+            waitForAll() {
+                return this.completePromise;
+            }
         }
         
         // Copy text from a specific element
@@ -322,11 +527,11 @@
             
             // Skip header row
             for (let i = 1; i < rows.length; i++) {
-                const finalUrlCell = rows[i].cells[1];
+                const finalUrlCell = rows[i].cells[2];
                 const url = finalUrlCell.textContent;
                 
-                // Don't include error messages
-                if (!url.startsWith('Error:')) {
+                // Don't include error messages or pending status
+                if (!url.startsWith('Error:') && url !== 'Pending...') {
                     allUrls += url + '\n';
                 }
             }
@@ -340,9 +545,14 @@
             });
         }
         
-        // Copy bulk results in a clean format
+        // Copy bulk results in a clean format (directly from input to output)
         function copyBulkResults() {
             const bulkUrlInput = document.getElementById('bulkUrlInput');
+            const processButton = document.getElementById('processButton');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressStatus = document.getElementById('progressStatus');
+            const progressPercentage = document.getElementById('progressPercentage');
             
             const urlsText = bulkUrlInput.value.trim();
             if (!urlsText) {
@@ -357,27 +567,70 @@
                 return;
             }
             
+            // Disable process button
+            processButton.disabled = true;
+            
+            // Show progress
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressStatus.textContent = `Processing URLs for copy... (0/${urls.length})`;
+            progressPercentage.textContent = '0%';
+            
+            // Get concurrency setting
+            const concurrentRequests = parseInt(document.getElementById('concurrentRequests').value, 10) || 10;
+            
             // Show "processing" message
             const bulkResults = document.getElementById('bulkResults');
             bulkResults.innerHTML = '<h3>Processing URLs for copying...</h3>';
             
-            // Process all URLs and get their final destinations
-            Promise.all(urls.map(url => getRedirectInfo(url)))
-                .then(results => {
-                    // Create a text string with all final URLs
-                    const finalUrls = results.map(info => info.finalUrl || 'N/A').join('\n');
-                    
-                    // Copy to clipboard
-                    navigator.clipboard.writeText(finalUrls).then(() => {
-                        bulkResults.innerHTML = '<h3>All final URLs copied to clipboard!</h3>';
-                    }).catch(err => {
-                        console.error('Failed to copy: ', err);
-                        bulkResults.innerHTML = '<h3>Failed to copy results to clipboard</h3>';
-                    });
-                })
-                .catch(error => {
-                    bulkResults.innerHTML = `<h3>Error processing URLs: ${error.message}</h3>`;
+            // Create a queue with limited concurrency
+            const queue = new URLProcessingQueue(concurrentRequests);
+            const results = [];
+            
+            // Process each URL
+            for (let i = 0; i < urls.length; i++) {
+                queue.add(async () => {
+                    try {
+                        const result = await getRedirectInfo(urls[i]);
+                        results[i] = result.finalUrl || 'N/A';
+                        
+                        // Update progress
+                        const processed = results.filter(r => r !== undefined).length;
+                        const progress = Math.floor((processed / urls.length) * 100);
+                        
+                        progressBar.style.width = `${progress}%`;
+                        progressStatus.textContent = `Processing URLs for copy... (${processed}/${urls.length})`;
+                        progressPercentage.textContent = `${progress}%`;
+                        
+                        return result;
+                    } catch (error) {
+                        console.error(`Error processing URL ${urls[i]}: ${error.message}`);
+                        results[i] = `Error: ${error.message}`;
+                        return { error: error.message };
+                    }
                 });
+            }
+            
+            // Wait for all processing to complete, then copy results
+            queue.waitForAll().then(() => {
+                // Create a text string with all final URLs (excluding errors)
+                const finalUrls = results
+                    .filter(url => url && !url.startsWith('Error:'))
+                    .join('\n');
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(finalUrls).then(() => {
+                    bulkResults.innerHTML = '<h3>All final URLs copied to clipboard!</h3>';
+                    progressStatus.textContent = 'Processing complete!';
+                    progressBar.style.width = '100%';
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    bulkResults.innerHTML = '<h3>Failed to copy results to clipboard</h3>';
+                });
+                
+                // Re-enable process button
+                processButton.disabled = false;
+            });
         }
         
         // Function to get redirect information for a URL
