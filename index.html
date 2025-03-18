@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple URL Redirect Tracker</title>
+    <title>URL Redirect Tracker</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
             margin: 0;
             padding: 20px;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
         
@@ -20,29 +20,45 @@
         
         .input-container {
             margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
         }
         
         input[type="text"] {
-            width: 70%;
-            padding: 8px;
+            flex-grow: 1;
+            padding: 10px;
             font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
         
         button {
-            padding: 8px 12px;
+            padding: 10px 15px;
             background-color: #4285f4;
             color: white;
             border: none;
+            border-radius: 4px;
             cursor: pointer;
+            font-size: 16px;
         }
         
         button:hover {
             background-color: #3367d6;
         }
         
+        .copy-btn {
+            background-color: #34a853;
+        }
+        
+        .copy-btn:hover {
+            background-color: #2e7d32;
+        }
+        
         #loadingIndicator {
             display: none;
             margin: 20px 0;
+            font-weight: bold;
+            color: #4285f4;
         }
         
         #results {
@@ -53,13 +69,14 @@
             display: none;
         }
         
-        .url {
+        .output-url {
             word-break: break-all;
             font-family: monospace;
             background-color: #f8f9fa;
-            padding: 8px;
-            margin: 5px 0;
-            border-radius: 3px;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
         }
         
         textarea {
@@ -68,12 +85,54 @@
             padding: 10px;
             margin-bottom: 10px;
             font-family: monospace;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: #f5f5f5;
+        }
+        
+        .copy-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        
+        .copy-success {
+            display: none;
+            color: #34a853;
+            font-weight: bold;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .bulk-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
     <h1>URL Redirect Tracker</h1>
-    <p>Enter a URL below to track redirects and find the final destination URL.</p>
+    <p>Enter a URL below to find its final destination URL.</p>
     
     <div class="input-container">
         <input type="text" id="urlInput" placeholder="Enter URL (e.g., bit.ly/example)">
@@ -81,21 +140,33 @@
     </div>
     
     <div id="loadingIndicator">
-        Tracking redirects... please wait.
+        Tracking redirect... please wait.
     </div>
     
     <div id="results">
-        <h3>Results:</h3>
-        <div id="resultsContent"></div>
+        <h3>Final Destination URL:</h3>
+        <div id="finalUrlContainer" class="output-url"></div>
+        
+        <div class="copy-container">
+            <span id="copySuccess" class="copy-success">Copied to clipboard!</span>
+            <button id="copyButton" class="copy-btn" onclick="copyFinalUrl()">Copy URL</button>
+        </div>
     </div>
     
-    <hr>
+    <hr style="margin: 30px 0;">
     
     <h2>Bulk URL Processing</h2>
-    <p>Enter multiple URLs (one per line) to process them all at once:</p>
+    <p>Enter multiple URLs (one per line) to track all their final destinations at once:</p>
+    
+    <div class="bulk-controls">
+        <div class="button-group">
+            <button onclick="trackBulkRedirects()">Process All URLs</button>
+            <button onclick="document.getElementById('bulkUrlInput').value = ''">Clear</button>
+        </div>
+        <button onclick="copyBulkResults()">Copy All Results</button>
+    </div>
     
     <textarea id="bulkUrlInput" placeholder="Enter URLs here, one per line"></textarea>
-    <button onclick="trackBulkRedirects()">Process Bulk URLs</button>
     
     <div id="bulkResults"></div>
     
@@ -105,7 +176,8 @@
             const urlInput = document.getElementById('urlInput');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const results = document.getElementById('results');
-            const resultsContent = document.getElementById('resultsContent');
+            const finalUrlContainer = document.getElementById('finalUrlContainer');
+            const copySuccess = document.getElementById('copySuccess');
             
             const url = urlInput.value.trim();
             if (!url) {
@@ -116,34 +188,50 @@
             // Show loading indicator
             loadingIndicator.style.display = 'block';
             results.style.display = 'none';
+            copySuccess.style.display = 'none';
             
             try {
                 const redirectInfo = await getRedirectInfo(url);
                 
-                // Display results
+                // Display results - only the final URL
                 loadingIndicator.style.display = 'none';
                 results.style.display = 'block';
                 
-                let resultHtml = '';
-                resultHtml += '<p><strong>Original URL:</strong></p>';
-                resultHtml += `<div class="url"><a href="${redirectInfo.originalUrl}" target="_blank">${redirectInfo.originalUrl}</a></div>`;
-                
-                resultHtml += '<p><strong>Final URL:</strong></p>';
                 if (redirectInfo.finalUrl) {
-                    resultHtml += `<div class="url"><a href="${redirectInfo.finalUrl}" target="_blank">${redirectInfo.finalUrl}</a></div>`;
+                    finalUrlContainer.textContent = redirectInfo.finalUrl;
+                    finalUrlContainer.innerHTML = `<a href="${redirectInfo.finalUrl}" target="_blank">${redirectInfo.finalUrl}</a>`;
                 } else {
-                    resultHtml += '<div class="url">Unable to determine final URL</div>';
+                    finalUrlContainer.textContent = 'Unable to determine final URL';
                 }
-                
-                resultHtml += `<p><strong>Redirects:</strong> ${redirectInfo.redirects}</p>`;
-                
-                resultsContent.innerHTML = resultHtml;
             } catch (error) {
                 // Handle error
                 loadingIndicator.style.display = 'none';
                 results.style.display = 'block';
-                resultsContent.innerHTML = `<p>Error: ${error.message}</p>`;
+                finalUrlContainer.textContent = `Error: ${error.message}`;
             }
+        }
+        
+        // Function to copy the final URL to clipboard
+        function copyFinalUrl() {
+            const finalUrlContainer = document.getElementById('finalUrlContainer');
+            const copySuccess = document.getElementById('copySuccess');
+            
+            // Get the URL text content
+            const finalUrl = finalUrlContainer.textContent;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(finalUrl).then(() => {
+                // Show success message
+                copySuccess.style.display = 'block';
+                
+                // Hide success message after 3 seconds
+                setTimeout(() => {
+                    copySuccess.style.display = 'none';
+                }, 3000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard. Please try again.');
+            });
         }
         
         // Function to process bulk URLs
@@ -168,9 +256,9 @@
             // Initialize results HTML
             bulkResults.innerHTML = '<h3>Processing URLs...</h3>';
             
-            // Create a table for results
-            let resultsHtml = '<table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%;">';
-            resultsHtml += '<tr><th>#</th><th>Original URL</th><th>Final URL</th><th>Redirects</th></tr>';
+            // Create a table for results - simplified for easy copying
+            let resultsHtml = '<table>';
+            resultsHtml += '<tr><th>Original URL</th><th>Final URL</th><th>Action</th></tr>';
             
             // Process each URL
             for (let i = 0; i < urls.length; i++) {
@@ -180,14 +268,12 @@
                     const redirectInfo = await getRedirectInfo(url);
                     
                     resultsHtml += `<tr>
-                        <td>${i + 1}</td>
-                        <td><a href="${redirectInfo.originalUrl}" target="_blank">${redirectInfo.originalUrl}</a></td>
-                        <td>${redirectInfo.finalUrl ? `<a href="${redirectInfo.finalUrl}" target="_blank">${redirectInfo.finalUrl}</a>` : 'N/A'}</td>
-                        <td>${redirectInfo.redirects}</td>
+                        <td>${url}</td>
+                        <td id="bulk-final-${i}">${redirectInfo.finalUrl || 'N/A'}</td>
+                        <td><button onclick="copyToClipboard('bulk-final-${i}')">Copy</button></td>
                     </tr>`;
                 } catch (error) {
                     resultsHtml += `<tr>
-                        <td>${i + 1}</td>
                         <td>${url}</td>
                         <td>Error: ${error.message}</td>
                         <td>-</td>
@@ -198,8 +284,100 @@
                 bulkResults.innerHTML = `<h3>Processing URLs (${i + 1}/${urls.length})...</h3>` + resultsHtml + '</table>';
             }
             
-            // Final update
-            bulkResults.innerHTML = `<h3>Processed ${urls.length} URLs</h3>` + resultsHtml + '</table>';
+            // Final update with copy all button
+            bulkResults.innerHTML = `
+                <h3>Processed ${urls.length} URLs</h3>
+                <div class="bulk-results-controls">
+                    <button onclick="copyAllFinalUrls()">Copy All Final URLs</button>
+                </div>
+                ${resultsHtml}</table>`;
+        }
+        
+        // Copy text from a specific element
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            const text = element.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual feedback
+                const originalBackground = element.style.backgroundColor;
+                element.style.backgroundColor = '#e6ffe6';
+                setTimeout(() => {
+                    element.style.backgroundColor = originalBackground;
+                }, 1000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+        
+        // Copy all final URLs to clipboard
+        function copyAllFinalUrls() {
+            const table = document.querySelector('#bulkResults table');
+            if (!table) return;
+            
+            const rows = table.querySelectorAll('tr');
+            let allUrls = '';
+            
+            // Skip header row
+            for (let i = 1; i < rows.length; i++) {
+                const finalUrlCell = rows[i].cells[1];
+                const url = finalUrlCell.textContent;
+                
+                // Don't include error messages
+                if (!url.startsWith('Error:')) {
+                    allUrls += url + '\n';
+                }
+            }
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(allUrls.trim()).then(() => {
+                alert('All final URLs copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+        
+        // Copy bulk results in a clean format
+        function copyBulkResults() {
+            const bulkUrlInput = document.getElementById('bulkUrlInput');
+            
+            const urlsText = bulkUrlInput.value.trim();
+            if (!urlsText) {
+                alert('Please enter URLs first');
+                return;
+            }
+            
+            const urls = urlsText.split('\n').map(url => url.trim()).filter(url => url !== '');
+            
+            if (urls.length === 0) {
+                alert('No valid URLs found');
+                return;
+            }
+            
+            // Show "processing" message
+            const bulkResults = document.getElementById('bulkResults');
+            bulkResults.innerHTML = '<h3>Processing URLs for copying...</h3>';
+            
+            // Process all URLs and get their final destinations
+            Promise.all(urls.map(url => getRedirectInfo(url)))
+                .then(results => {
+                    // Create a text string with all final URLs
+                    const finalUrls = results.map(info => info.finalUrl || 'N/A').join('\n');
+                    
+                    // Copy to clipboard
+                    navigator.clipboard.writeText(finalUrls).then(() => {
+                        bulkResults.innerHTML = '<h3>All final URLs copied to clipboard!</h3>';
+                    }).catch(err => {
+                        console.error('Failed to copy: ', err);
+                        bulkResults.innerHTML = '<h3>Failed to copy results to clipboard</h3>';
+                    });
+                })
+                .catch(error => {
+                    bulkResults.innerHTML = `<h3>Error processing URLs: ${error.message}</h3>`;
+                });
         }
         
         // Function to get redirect information for a URL
