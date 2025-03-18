@@ -362,7 +362,6 @@
             .url-input, .track-button, .action-button, .secondary-button {
                 border-radius: 4px;
                 width: 100%;
-                margin: 5px 0;
             }
             
             .btn-container {
@@ -836,106 +835,109 @@
             document.body.removeChild(link);
         }
         
-        // Tabs functionality
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                // Remove active class from all tabs
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                
-                // Add active class to clicked tab
-                tab.classList.add('active');
-                
-                // Hide all tab contents
-                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-                
-                // Show the corresponding tab content
-                const tabId = tab.getAttribute('data-tab');
-                document.getElementById(`${tabId}-tab`).classList.add('active');
+        // Initialize UI functionality when document is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Tabs functionality
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    tab.classList.add('active');
+                    
+                    // Hide all tab contents
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    
+                    // Show the corresponding tab content
+                    const tabId = tab.getAttribute('data-tab');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
             });
-        });
-        
-        // Single URL tracking
-        document.getElementById('trackSingleButton').addEventListener('click', async () => {
-            const url = document.getElementById('singleUrlInput').value.trim();
-            if (!url) return;
             
-            const loadingElem = document.getElementById('singleLoading');
-            const resultsElem = document.getElementById('singleResults');
-            
-            loadingElem.style.display = 'flex';
-            resultsElem.style.display = 'none';
-            
-            try {
-                const redirectInfo = await trackRedirect(url);
-                loadingElem.style.display = 'none';
-                displaySingleResult(redirectInfo);
-            } catch (error) {
-                loadingElem.style.display = 'none';
+            // Single URL tracking
+            document.getElementById('trackSingleButton').addEventListener('click', async () => {
+                const url = document.getElementById('singleUrlInput').value.trim();
+                if (!url) return;
                 
-                // Display error
-                resultsElem.style.display = 'block';
-                resultsElem.innerHTML = `
-                    <div class="error-msg">
-                        <strong>Error:</strong> ${error.message}
-                    </div>
-                `;
-            }
-        });
-        
-        // Single URL input keypress
-        document.getElementById('singleUrlInput').addEventListener('keypress', async (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('trackSingleButton').click();
-            }
-        });
-        
-        // Bulk URL tracking
-        document.getElementById('trackBulkButton').addEventListener('click', async () => {
-            const urlsText = document.getElementById('bulkUrlInput').value.trim();
-            if (!urlsText) return;
+                const loadingElem = document.getElementById('singleLoading');
+                const resultsElem = document.getElementById('singleResults');
+                
+                loadingElem.style.display = 'flex';
+                resultsElem.style.display = 'none';
+                
+                try {
+                    const redirectInfo = await trackRedirect(url);
+                    loadingElem.style.display = 'none';
+                    displaySingleResult(redirectInfo);
+                } catch (error) {
+                    loadingElem.style.display = 'none';
+                    
+                    // Display error
+                    resultsElem.style.display = 'block';
+                    resultsElem.innerHTML = `
+                        <div class="error-msg">
+                            <strong>Error:</strong> ${error.message}
+                        </div>
+                    `;
+                }
+            });
             
-            // Split URLs by line breaks and filter empty lines
-            const urls = urlsText.split(/\r?\n/).filter(url => url.trim() !== '');
+            // Single URL input keypress
+            document.getElementById('singleUrlInput').addEventListener('keypress', async (e) => {
+                if (e.key === 'Enter') {
+                    document.getElementById('trackSingleButton').click();
+                }
+            });
             
-            if (urls.length === 0) {
-                alert('Please enter at least one URL');
-                return;
-            }
+            // Bulk URL tracking
+            document.getElementById('trackBulkButton').addEventListener('click', async () => {
+                const urlsText = document.getElementById('bulkUrlInput').value.trim();
+                if (!urlsText) return;
+                
+                // Split URLs by line breaks and filter empty lines
+                const urls = urlsText.split(/\r?\n/).filter(url => url.trim() !== '');
+                
+                if (urls.length === 0) {
+                    alert('Please enter at least one URL');
+                    return;
+                }
+                
+                if (urls.length > 500) {
+                    const confirm = window.confirm(`You're about to process ${urls.length} URLs, which may take some time. Continue?`);
+                    if (!confirm) return;
+                }
+                
+                // Track the URLs
+                await trackBulkUrls(urls);
+            });
             
-            if (urls.length > 500) {
-                const confirm = window.confirm(`You're about to process ${urls.length} URLs, which may take some time. Continue?`);
-                if (!confirm) return;
-            }
+            // Clear bulk input
+            document.getElementById('clearBulkButton').addEventListener('click', () => {
+                document.getElementById('bulkUrlInput').value = '';
+                document.getElementById('bulkUrlInput').focus();
+            });
             
-            // Track the URLs
-            await trackBulkUrls(urls);
-        });
-        
-        // Clear bulk input
-        document.getElementById('clearBulkButton').addEventListener('click', () => {
-            document.getElementById('bulkUrlInput').value = '';
-            document.getElementById('bulkUrlInput').focus();
-        });
-        
-        // Paste URLs into bulk input
-        document.getElementById('pasteBulkButton').addEventListener('click', async () => {
-            try {
-                const clipboardText = await navigator.clipboard.readText();
-                document.getElementById('bulkUrlInput').value = clipboardText;
-            } catch (error) {
-                alert('Unable to access clipboard. Please paste manually.');
-            }
-        });
-        
-        // Initialize special product mappings
-        const knownProductMappings = {
-            'MB3764': '12v-850a-jump-starter-and-powerbank-with-10w-wireless-qi-charger'
-        };
-        
-        // Add a sample URL to the textarea for demonstration
-        document.getElementById('bulkUrlInput').placeholder = `Enter up to 500 URLs, one per line:
+            // Paste URLs into bulk input
+            document.getElementById('pasteBulkButton').addEventListener('click', async () => {
+                try {
+                    const clipboardText = await navigator.clipboard.readText();
+                    document.getElementById('bulkUrlInput').value = clipboardText;
+                } catch (error) {
+                    alert('Unable to access clipboard. Please paste manually.');
+                }
+            });
+            
+            // Add a sample URL to the textarea for demonstration
+            document.getElementById('bulkUrlInput').placeholder = `Enter up to 500 URLs, one per line:
 
 https://bit.ly/example
 https://tinyurl.com/example
 https://www.jaycar.com.au/p/MB3764?utm_source=web&utm_medium=catalogue
 ...`;
+        });
+    </script>
+</body>
+</html>
